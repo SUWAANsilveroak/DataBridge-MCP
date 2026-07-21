@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "local-data-mcp"
+description = "A Model Context Protocol server exposing safe, validated tools over local data sources."
+readme = "README.md"
+requires-python = ">=3.10"
+dynamic = ["version"]
+dependencies = [
+    "mcp>=1.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+]
+
+# `python -m local_data_mcp` is the command Claude Desktop will launch.
+# We also expose a console script for convenience during local development.
+[project.scripts]
+local-data-mcp = "local_data_mcp.server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# Single source of truth for the version: local_data_mcp/__init__.py.
+[tool.setuptools.dynamic]
+version = { attr = "local_data_mcp.__version__" }

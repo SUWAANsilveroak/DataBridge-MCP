@@ -1,0 +1,8 @@
+# Runtime dependencies for the Universal Local Data MCP Server.
+# Mirrors the [project].dependencies in pyproject.toml, pinned for reproducible
+# installs. Dev-only tools (pytest) live in the [dev] optional group.
+#
+# Install runtime only:      pip install -r requirements.txt
+# Install with dev tooling:  pip install -e ".[dev]"
+
+mcp==1.28.1
