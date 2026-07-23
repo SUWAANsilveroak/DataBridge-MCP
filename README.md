@@ -84,14 +84,31 @@ pytest
 | Tool | Input | Description |
 |------|-------|-------------|
 | `server_info` | none | Returns the server's name, version, and status. A health check. |
+| `list_sources` | none | Lists the data sources this server exposes. |
+| `list_resources` | `source` | Lists the resources (tables, sheets, documents) in a given source. |
 
 ## Project layout
 
 ```
 src/local_data_mcp/
-  __init__.py    # package + single-source-of-truth __version__
-  __main__.py    # `python -m local_data_mcp` entry point
-  server.py      # builds the MCP server, registers tools, runs stdio
-tests/
-  test_server.py # tests the tool logic
+  __init__.py         # package + single-source-of-truth __version__
+  __main__.py         # `python -m local_data_mcp` entry point
+  server.py           # builds the MCP server, registers tools, runs stdio
+  config.py           # typed, env-driven Settings model
+  logging_config.py   # stderr logging setup
+  errors.py           # domain exceptions
+  adapters/           # the data-source abstraction
+    base.py           #   DataSourceAdapter — the contract (ABC)
+    registry.py       #   AdapterRegistry — holds & looks up adapters
+    memory.py         #   InMemoryAdapter — reference implementation
+tests/                # one test module per source module
 ```
+
+## Architecture: the adapter pattern
+
+The MCP tools never talk to a concrete data source. They talk to an
+**`AdapterRegistry`**, which hands back objects implementing the
+**`DataSourceAdapter`** contract. Adding a new source (Google Sheets, SQLite,
+CSV, …) means writing a new adapter class and registering it — **no existing
+code changes.** That is the Open/Closed Principle in action, and it is what
+makes this server "universal" rather than tied to one storage format.
