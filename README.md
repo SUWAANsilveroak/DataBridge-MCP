@@ -60,6 +60,19 @@ interpreter inside your virtual environment:
 
 Restart Claude Desktop, then ask it to call the `server_info` tool.
 
+## Configuration
+
+The server is configured through environment variables (namespaced with the
+`LOCAL_DATA_MCP_` prefix). All are optional and have sensible defaults.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LOCAL_DATA_MCP_LOG_LEVEL` | `INFO` | Log verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL` (case-insensitive). |
+
+Logs are written to **stderr**, never stdout — stdout is reserved for the MCP
+protocol. When run from Claude Desktop, log output appears in the client's MCP
+server logs.
+
 ## Running the tests
 
 ```powershell

@@ -6,3 +6,4 @@
 # Install with dev tooling:  pip install -e ".[dev]"
 
 mcp==1.28.1
+pydantic==2.13.4
