@@ -10,9 +10,15 @@ port, which keeps a "local data" server genuinely local.
 
 from __future__ import annotations
 
+import logging
+
 from mcp.server.fastmcp import FastMCP
 
 from local_data_mcp import __version__
+from local_data_mcp.config import Settings
+from local_data_mcp.logging_config import configure_logging
+
+logger = logging.getLogger(__name__)
 
 # The name the client displays for this server. Kept as a constant so the
 # server and its tests agree on a single value.
@@ -40,8 +46,19 @@ def server_info() -> dict[str, str]:
 
 
 def main() -> None:
-    """Run the MCP server over the stdio transport."""
-    mcp.run(transport="stdio")
+    """Configure the server from the environment and run it over stdio.
+
+    The ``try/finally`` guarantees we log a shutdown line even when the client
+    disconnects or the user interrupts with Ctrl+C.
+    """
+    settings = Settings.from_env()
+    configure_logging(settings.log_level)
+
+    logger.info("server starting (name=%s, version=%s)", SERVER_NAME, __version__)
+    try:
+        mcp.run(transport="stdio")
+    finally:
+        logger.info("server stopping")
 
 
 if __name__ == "__main__":

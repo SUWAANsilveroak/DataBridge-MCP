@@ -10,6 +10,9 @@ requires-python = ">=3.10"
 dynamic = ["version"]
 dependencies = [
     "mcp>=1.2.0",
+    # Declared directly because we import it in config.py. It also ships as a
+    # transitive dependency of `mcp`, but we depend on what we import.
+    "pydantic>=2",
 ]
 
 [project.optional-dependencies]
