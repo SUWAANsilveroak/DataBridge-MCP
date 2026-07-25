@@ -20,4 +20,10 @@ dist/
 .DS_Store
 Thumbs.db
 
+# Secrets — never commit these
+# OAuth client secrets downloaded from Google Cloud Console:
+credentials.json
+# User OAuth token (contains a long-lived refresh token) written after authorizing:
+token.json
+
 personal_doc.md

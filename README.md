@@ -68,10 +68,38 @@ The server is configured through environment variables (namespaced with the
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `LOCAL_DATA_MCP_LOG_LEVEL` | `INFO` | Log verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL` (case-insensitive). |
+| `LOCAL_DATA_MCP_GOOGLE_CREDENTIALS_FILE` | `credentials.json` | Path to the OAuth client secrets file from Google Cloud Console. |
+| `LOCAL_DATA_MCP_GOOGLE_TOKEN_FILE` | `token.json` | Path where the user's OAuth token is saved after authorizing. |
 
 Logs are written to **stderr**, never stdout — stdout is reserved for the MCP
 protocol. When run from Claude Desktop, log output appears in the client's MCP
 server logs.
+
+## Authorizing with Google (one-time)
+
+Google access is split into a one-time interactive step and silent runtime use,
+because the MCP server itself cannot open a browser.
+
+1. In the Google Cloud Console, enable the **Google Sheets API** and **Google
+   Docs API**, configure an **External** OAuth consent screen (add yourself as a
+   test user), and create an **OAuth client ID → Desktop app**. Download its
+   JSON and save it as `credentials.json` in the project root.
+2. Run the one-time authorization (opens a browser, asks you to consent):
+
+   ```powershell
+   python -m local_data_mcp.google_workspace.auth
+   ```
+
+   This writes `token.json`, which the server then uses automatically and
+   refreshes as needed. **Neither `credentials.json` nor `token.json` is
+   committed** — both are git-ignored.
+
+The app requests only **read-only** scopes (`spreadsheets.readonly`,
+`documents.readonly`) and no Google Drive access.
+
+**Switching to an organization account later** requires no code changes: point
+`LOCAL_DATA_MCP_GOOGLE_CREDENTIALS_FILE` at the org's OAuth client file (or
+replace `credentials.json`) and re-run the authorize command.
 
 ## Running the tests
 

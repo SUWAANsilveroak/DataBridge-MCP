@@ -31,6 +31,18 @@ class Settings(BaseModel):
         description="Minimum severity of log records that will be emitted.",
     )
 
+    # Google Workspace auth. Both are paths, so switching from a personal to an
+    # organization account later means pointing these at different files (or
+    # replacing the files) — no code change required.
+    google_credentials_file: str = Field(
+        default="credentials.json",
+        description="Path to the OAuth client secrets JSON from Google Cloud Console.",
+    )
+    google_token_file: str = Field(
+        default="token.json",
+        description="Path where the user's OAuth token is saved after authorizing.",
+    )
+
     @field_validator("log_level", mode="before")
     @classmethod
     def _normalize_log_level(cls, value: object) -> object:
@@ -54,5 +66,13 @@ class Settings(BaseModel):
         log_level = env.get(f"{ENV_PREFIX}LOG_LEVEL")
         if log_level is not None:
             values["log_level"] = log_level
+
+        credentials_file = env.get(f"{ENV_PREFIX}GOOGLE_CREDENTIALS_FILE")
+        if credentials_file is not None:
+            values["google_credentials_file"] = credentials_file
+
+        token_file = env.get(f"{ENV_PREFIX}GOOGLE_TOKEN_FILE")
+        if token_file is not None:
+            values["google_token_file"] = token_file
 
         return cls(**values)

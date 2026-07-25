@@ -13,6 +13,12 @@ dependencies = [
     # Declared directly because we import it in config.py. It also ships as a
     # transitive dependency of `mcp`, but we depend on what we import.
     "pydantic>=2",
+    # Google Workspace auth (F4). google-auth handles credentials + refresh;
+    # google-auth-oauthlib provides the one-time interactive browser flow.
+    # google-api-python-client is intentionally NOT here yet — it's for making
+    # Sheets/Docs API calls and arrives with the first adapter (F5).
+    "google-auth>=2",
+    "google-auth-oauthlib>=1",
 ]
 
 [project.optional-dependencies]
@@ -24,6 +30,8 @@ dev = [
 # We also expose a console script for convenience during local development.
 [project.scripts]
 local-data-mcp = "local_data_mcp.server:main"
+# One-time interactive Google authorization, run by hand in a terminal.
+local-data-mcp-authorize = "local_data_mcp.google_workspace.auth:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

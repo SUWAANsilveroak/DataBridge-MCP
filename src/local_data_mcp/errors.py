@@ -31,3 +31,7 @@ class DuplicateAdapterError(LocalDataMCPError):
     def __init__(self, name: str) -> None:
         self.name = name
         super().__init__(f"A data source named {name!r} is already registered.")
+
+
+class GoogleAuthError(LocalDataMCPError):
+    """Raised when Google credentials are missing, invalid, or cannot be refreshed."""
