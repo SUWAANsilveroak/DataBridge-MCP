@@ -121,6 +121,7 @@ pytest
 | `list_sources` | none | Lists the data sources this server exposes. |
 | `list_resources` | `source` | Lists the resources (tables, sheets, documents) in a given source. |
 | `read_rows` | `source`, `resource`, `limit` | Reads up to `limit` rows (1–1000, default 100) from a tabular resource, as header-keyed dicts. |
+| `get_schema` | `source`, `resource` | Returns a tabular resource's column names (normalized) without reading rows. |
 
 ## Project layout
 

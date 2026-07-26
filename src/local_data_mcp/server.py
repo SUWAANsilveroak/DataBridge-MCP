@@ -16,7 +16,7 @@ from mcp.server.fastmcp import FastMCP
 
 from local_data_mcp import __version__
 from local_data_mcp.adapters import AdapterRegistry, InMemoryAdapter
-from local_data_mcp.adapters.capabilities import SupportsTabularRead
+from local_data_mcp.adapters.capabilities import SupportsTabularRead, TableSchema
 from local_data_mcp.config import Settings
 from local_data_mcp.errors import (
     AdapterNotFoundError,
@@ -123,6 +123,24 @@ def read_rows(
         raise UnsupportedCapabilityError(source, "tabular reads")
 
     return adapter.read_rows(resource, limit)
+
+
+@mcp.tool()
+def get_schema(source: str, resource: str) -> TableSchema:
+    """Return the column schema of a tabular resource (e.g. a spreadsheet tab).
+
+    Lets a client discover a resource's columns without reading its rows.
+
+    Args:
+        source: a data source name, as returned by ``list_sources``.
+        resource: a resource within that source, as returned by ``list_resources``.
+    """
+    logger.info("tool=get_schema source=%s resource=%s", source, resource)
+    adapter = registry.get(source)
+    if not isinstance(adapter, SupportsTabularRead):
+        raise UnsupportedCapabilityError(source, "tabular reads")
+
+    return adapter.get_schema(resource)
 
 
 def _register_configured_sources(

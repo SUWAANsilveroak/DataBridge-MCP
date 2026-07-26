@@ -1,4 +1,4 @@
-"""Tests for the read_rows MCP tool.
+"""Tests for the read_rows and get_schema MCP tools.
 
 We swap the server's global registry for a controlled one (dependency injection
 via monkeypatch) so we can register exactly the sources each case needs.
@@ -8,11 +8,11 @@ import pytest
 
 from local_data_mcp import server
 from local_data_mcp.adapters.base import DataSourceAdapter
-from local_data_mcp.adapters.capabilities import SupportsTabularRead
+from local_data_mcp.adapters.capabilities import SupportsTabularRead, TableSchema
 from local_data_mcp.adapters.memory import InMemoryAdapter
 from local_data_mcp.adapters.registry import AdapterRegistry
 from local_data_mcp.errors import AdapterNotFoundError, UnsupportedCapabilityError
-from local_data_mcp.server import read_rows
+from local_data_mcp.server import get_schema, read_rows
 
 
 class _TabularStub(DataSourceAdapter, SupportsTabularRead):
@@ -29,6 +29,9 @@ class _TabularStub(DataSourceAdapter, SupportsTabularRead):
     def list_resources(self) -> list[str]:
         return ["t"]
 
+    def get_schema(self, resource: str) -> TableSchema:
+        return TableSchema(resource=resource, columns=["a"])
+
     def read_rows(self, resource: str, limit: int) -> list[dict[str, str]]:
         return self._rows[:limit]
 
@@ -38,6 +41,9 @@ def temp_registry(monkeypatch):
     registry = AdapterRegistry()
     monkeypatch.setattr(server, "registry", registry)
     return registry
+
+
+# --- read_rows --------------------------------------------------------------
 
 
 def test_read_rows_happy_path(temp_registry) -> None:
@@ -67,3 +73,19 @@ def test_read_rows_non_tabular_source_raises(temp_registry) -> None:
     temp_registry.register(InMemoryAdapter("demo", resources=["users"]))
     with pytest.raises(UnsupportedCapabilityError):
         read_rows("demo", "users", limit=10)
+
+
+# --- get_schema -------------------------------------------------------------
+
+
+def test_get_schema_happy_path(temp_registry) -> None:
+    temp_registry.register(_TabularStub("t", []))
+    schema = get_schema("t", "t")
+    assert schema.resource == "t"
+    assert schema.columns == ["a"]
+
+
+def test_get_schema_non_tabular_source_raises(temp_registry) -> None:
+    temp_registry.register(InMemoryAdapter("demo", resources=["users"]))
+    with pytest.raises(UnsupportedCapabilityError):
+        get_schema("demo", "users")
