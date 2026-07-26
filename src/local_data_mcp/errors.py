@@ -58,3 +58,11 @@ class UnsupportedCapabilityError(LocalDataMCPError):
         self.source = source
         self.capability = capability
         super().__init__(f"Source {source!r} does not support {capability}.")
+
+
+class DataSourceError(LocalDataMCPError):
+    """Raised when an underlying data source fails to fulfil a request.
+
+    Wraps low-level backend failures (e.g. a Google API ``HttpError``) in a
+    clean, actionable message instead of leaking the raw client exception.
+    """
