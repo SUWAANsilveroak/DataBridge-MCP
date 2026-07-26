@@ -29,6 +29,7 @@ from local_data_mcp.google_workspace.sheets import (
     build_sheets_service,
 )
 from local_data_mcp.logging_config import configure_logging
+from local_data_mcp.search import filter_names, filter_rows
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,8 @@ SERVER_NAME = "universal-local-data-mcp"
 # and hanging the server (and blowing up its own context).
 DEFAULT_ROW_LIMIT = 100
 MAX_ROW_LIMIT = 1000
+# search_rows scans up to this many rows of a resource before filtering matches.
+SEARCH_SCAN_LIMIT = MAX_ROW_LIMIT
 
 # The application object. Tools are registered onto it via the @mcp.tool()
 # decorator below.
@@ -141,6 +144,63 @@ def get_schema(source: str, resource: str) -> TableSchema:
         raise UnsupportedCapabilityError(source, "tabular reads")
 
     return adapter.get_schema(resource)
+
+
+@mcp.tool()
+def find_resources(source: str, query: str) -> list[str]:
+    """Find resources in a source whose name matches ``query``.
+
+    Case-insensitive substring match. Use this to locate the right resource in a
+    source that has many (e.g. a spreadsheet with hundreds of tabs) without
+    listing them all.
+
+    Args:
+        source: a data source name, as returned by ``list_sources``.
+        query: text to look for in resource names. An empty query matches all.
+    """
+    logger.info("tool=find_resources source=%s query=%r", source, query)
+    adapter = registry.get(source)
+    return filter_names(adapter.list_resources(), query)
+
+
+@mcp.tool()
+def search_rows(
+    source: str, resource: str, query: str, limit: int = DEFAULT_ROW_LIMIT
+) -> list[dict[str, str]]:
+    """Find rows in a tabular resource where any cell contains ``query``.
+
+    Scans up to the first 1000 rows of the resource and returns up to ``limit``
+    matching rows.
+
+    Args:
+        source: a data source name, as returned by ``list_sources``.
+        resource: a resource within that source, as returned by ``list_resources``.
+        query: text to look for in any cell (case-insensitive). Empty matches all.
+        limit: maximum number of matching rows to return (1..1000, default 100).
+    """
+    logger.info(
+        "tool=search_rows source=%s resource=%s query=%r limit=%s",
+        source,
+        resource,
+        query,
+        limit,
+    )
+    if not 1 <= limit <= MAX_ROW_LIMIT:
+        raise ValueError(f"limit must be between 1 and {MAX_ROW_LIMIT}, got {limit}.")
+
+    adapter = registry.get(source)
+    if not isinstance(adapter, SupportsTabularRead):
+        raise UnsupportedCapabilityError(source, "tabular reads")
+
+    rows = adapter.read_rows(resource, SEARCH_SCAN_LIMIT)
+    if len(rows) == SEARCH_SCAN_LIMIT:
+        logger.warning(
+            "search_rows hit the %s-row scan cap in %r; rows beyond that were "
+            "not searched",
+            SEARCH_SCAN_LIMIT,
+            resource,
+        )
+    return filter_rows(rows, query)[:limit]
 
 
 def _register_configured_sources(
