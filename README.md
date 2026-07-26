@@ -52,13 +52,18 @@ interpreter inside your virtual environment:
   "mcpServers": {
     "universal-local-data": {
       "command": "C:\\Users\\Dell\\OneDrive\\Attachments\\Desktop\\MCP\\venv\\Scripts\\python.exe",
-      "args": ["-m", "local_data_mcp"]
+      "args": ["-m", "local_data_mcp"],
+      "env": {
+        "LOCAL_DATA_MCP_GOOGLE_SHEETS_ID": "your-spreadsheet-id-here"
+      }
     }
   }
 }
 ```
 
-Restart Claude Desktop, then ask it to call the `server_info` tool.
+Restart Claude Desktop, then ask it to call the `server_info` tool. With a
+`LOCAL_DATA_MCP_GOOGLE_SHEETS_ID` set (and after authorizing), the spreadsheet
+appears as a source named `gsheets` — try `list_resources` then `read_rows`.
 
 ## Configuration
 
@@ -70,6 +75,7 @@ The server is configured through environment variables (namespaced with the
 | `LOCAL_DATA_MCP_LOG_LEVEL` | `INFO` | Log verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL` (case-insensitive). |
 | `LOCAL_DATA_MCP_GOOGLE_CREDENTIALS_FILE` | `credentials.json` | Path to the OAuth client secrets file from Google Cloud Console. |
 | `LOCAL_DATA_MCP_GOOGLE_TOKEN_FILE` | `token.json` | Path where the user's OAuth token is saved after authorizing. |
+| `LOCAL_DATA_MCP_GOOGLE_SHEETS_ID` | *(unset)* | ID of a Google Spreadsheet to expose (the string in its URL between `/d/` and `/edit`). If unset, no Sheets source is registered. |
 
 Logs are written to **stderr**, never stdout — stdout is reserved for the MCP
 protocol. When run from Claude Desktop, log output appears in the client's MCP
@@ -114,6 +120,7 @@ pytest
 | `server_info` | none | Returns the server's name, version, and status. A health check. |
 | `list_sources` | none | Lists the data sources this server exposes. |
 | `list_resources` | `source` | Lists the resources (tables, sheets, documents) in a given source. |
+| `read_rows` | `source`, `resource`, `limit` | Reads up to `limit` rows (1–1000, default 100) from a tabular resource, as header-keyed dicts. |
 
 ## Project layout
 
@@ -127,8 +134,12 @@ src/local_data_mcp/
   errors.py           # domain exceptions
   adapters/           # the data-source abstraction
     base.py           #   DataSourceAdapter — the contract (ABC)
+    capabilities.py   #   SupportsTabularRead — opt-in read capability
     registry.py       #   AdapterRegistry — holds & looks up adapters
     memory.py         #   InMemoryAdapter — reference implementation
+  google_workspace/   # Google integration
+    auth.py           #   OAuth: authorize (interactive) + load (silent)
+    sheets.py         #   GoogleSheetsAdapter — reads one spreadsheet
 tests/                # one test module per source module
 ```
 
