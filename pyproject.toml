@@ -19,6 +19,9 @@ dependencies = [
     # Sheets/Docs API calls and arrives with the first adapter (F5).
     "google-auth>=2",
     "google-auth-oauthlib>=1",
+    # The official client for calling the Sheets/Docs APIs. Added now (F5)
+    # because this is the first feature that actually makes API calls.
+    "google-api-python-client>=2",
 ]
 
 [project.optional-dependencies]

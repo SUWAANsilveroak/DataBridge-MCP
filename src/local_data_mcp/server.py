@@ -16,8 +16,18 @@ from mcp.server.fastmcp import FastMCP
 
 from local_data_mcp import __version__
 from local_data_mcp.adapters import AdapterRegistry, InMemoryAdapter
+from local_data_mcp.adapters.capabilities import SupportsTabularRead
 from local_data_mcp.config import Settings
-from local_data_mcp.errors import AdapterNotFoundError
+from local_data_mcp.errors import (
+    AdapterNotFoundError,
+    GoogleAuthError,
+    UnsupportedCapabilityError,
+)
+from local_data_mcp.google_workspace.auth import load_credentials
+from local_data_mcp.google_workspace.sheets import (
+    GoogleSheetsAdapter,
+    build_sheets_service,
+)
 from local_data_mcp.logging_config import configure_logging
 
 logger = logging.getLogger(__name__)
@@ -25,6 +35,11 @@ logger = logging.getLogger(__name__)
 # The name the client displays for this server. Kept as a constant so the
 # server and its tests agree on a single value.
 SERVER_NAME = "universal-local-data-mcp"
+
+# Row-read limits. Bounding the count stops an LLM from asking for a huge sheet
+# and hanging the server (and blowing up its own context).
+DEFAULT_ROW_LIMIT = 100
+MAX_ROW_LIMIT = 1000
 
 # The application object. Tools are registered onto it via the @mcp.tool()
 # decorator below.
@@ -86,6 +101,54 @@ def list_resources(source: str) -> list[str]:
     return adapter.list_resources()
 
 
+@mcp.tool()
+def read_rows(
+    source: str, resource: str, limit: int = DEFAULT_ROW_LIMIT
+) -> list[dict[str, str]]:
+    """Read rows from a tabular resource (e.g. a spreadsheet tab).
+
+    Args:
+        source: a data source name, as returned by ``list_sources``.
+        resource: a resource within that source, as returned by ``list_resources``.
+        limit: maximum number of rows to return (1..1000, default 100).
+    """
+    logger.info(
+        "tool=read_rows source=%s resource=%s limit=%s", source, resource, limit
+    )
+    if not 1 <= limit <= MAX_ROW_LIMIT:
+        raise ValueError(f"limit must be between 1 and {MAX_ROW_LIMIT}, got {limit}.")
+
+    adapter = registry.get(source)
+    if not isinstance(adapter, SupportsTabularRead):
+        raise UnsupportedCapabilityError(source, "tabular reads")
+
+    return adapter.read_rows(resource, limit)
+
+
+def _register_configured_sources(
+    registry: AdapterRegistry, settings: Settings
+) -> None:
+    """Register optional, externally-configured data sources at runtime.
+
+    Currently just Google Sheets, and only when a spreadsheet ID is configured
+    *and* the user has authorized. Any failure is logged and skipped so the
+    server still starts with the always-available sources — Google not being set
+    up must not take the whole server down.
+    """
+    if not settings.google_sheets_id:
+        logger.info("no google_sheets_id configured; skipping Google Sheets source")
+        return
+    try:
+        credentials = load_credentials(settings)
+        service = build_sheets_service(credentials)
+        registry.register(
+            GoogleSheetsAdapter("gsheets", settings.google_sheets_id, service)
+        )
+        logger.info("registered Google Sheets source 'gsheets'")
+    except GoogleAuthError as error:
+        logger.warning("Google Sheets source not registered: %s", error)
+
+
 def main() -> None:
     """Configure the server from the environment and run it over stdio.
 
@@ -94,6 +157,7 @@ def main() -> None:
     """
     settings = Settings.from_env()
     configure_logging(settings.log_level)
+    _register_configured_sources(registry, settings)
 
     logger.info("server starting (name=%s, version=%s)", SERVER_NAME, __version__)
     try:

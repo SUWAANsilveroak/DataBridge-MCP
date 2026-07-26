@@ -42,6 +42,14 @@ class Settings(BaseModel):
         default="token.json",
         description="Path where the user's OAuth token is saved after authorizing.",
     )
+    google_sheets_id: str | None = Field(
+        default=None,
+        description=(
+            "ID of the Google Spreadsheet to expose (the string in its URL "
+            "between /d/ and /edit). If unset, no Google Sheets source is "
+            "registered."
+        ),
+    )
 
     @field_validator("log_level", mode="before")
     @classmethod
@@ -74,5 +82,9 @@ class Settings(BaseModel):
         token_file = env.get(f"{ENV_PREFIX}GOOGLE_TOKEN_FILE")
         if token_file is not None:
             values["google_token_file"] = token_file
+
+        sheets_id = env.get(f"{ENV_PREFIX}GOOGLE_SHEETS_ID")
+        if sheets_id is not None:
+            values["google_sheets_id"] = sheets_id
 
         return cls(**values)

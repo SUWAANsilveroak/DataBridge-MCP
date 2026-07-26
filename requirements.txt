@@ -9,3 +9,4 @@ mcp==1.28.1
 pydantic==2.13.4
 google-auth==2.56.2
 google-auth-oauthlib==1.4.0
+google-api-python-client==2.198.0

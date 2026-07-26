@@ -35,3 +35,26 @@ class DuplicateAdapterError(LocalDataMCPError):
 
 class GoogleAuthError(LocalDataMCPError):
     """Raised when Google credentials are missing, invalid, or cannot be refreshed."""
+
+
+class ResourceNotFoundError(LocalDataMCPError):
+    """Raised when a resource (tab/table/document) is not found in a source."""
+
+    def __init__(self, source: str, resource: str, available: list[str]) -> None:
+        self.source = source
+        self.resource = resource
+        self.available = available
+        available_text = ", ".join(available) if available else "none"
+        super().__init__(
+            f"No resource named {resource!r} in source {source!r}. "
+            f"Available resources: {available_text}."
+        )
+
+
+class UnsupportedCapabilityError(LocalDataMCPError):
+    """Raised when a source is asked to do something it does not support."""
+
+    def __init__(self, source: str, capability: str) -> None:
+        self.source = source
+        self.capability = capability
+        super().__init__(f"Source {source!r} does not support {capability}.")
