@@ -122,6 +122,8 @@ pytest
 | `list_resources` | `source` | Lists the resources (tables, sheets, documents) in a given source. |
 | `read_rows` | `source`, `resource`, `limit` | Reads up to `limit` rows (1–1000, default 100) from a tabular resource, as header-keyed dicts. |
 | `get_schema` | `source`, `resource` | Returns a tabular resource's column names (normalized) without reading rows. |
+| `find_resources` | `source`, `query` | Finds resource names matching a query (case-insensitive) — locate the right tab among many. |
+| `search_rows` | `source`, `resource`, `query`, `limit` | Returns rows whose any cell contains the query (scans up to 1000 rows). |
 
 ## Project layout
 
@@ -133,6 +135,7 @@ src/local_data_mcp/
   config.py           # typed, env-driven Settings model
   logging_config.py   # stderr logging setup
   errors.py           # domain exceptions
+  search.py           # pure matching helpers for the search tools
   adapters/           # the data-source abstraction
     base.py           #   DataSourceAdapter — the contract (ABC)
     capabilities.py   #   SupportsTabularRead — opt-in read capability
