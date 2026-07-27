@@ -1,0 +1,32 @@
+{
+  "manifest_version": "0.2",
+  "name": "local-data-mcp",
+  "display_name": "Universal Data MCP",
+  "version": "0.1.0",
+  "description": "Safe, read-only MCP tools over your data sources (Google Sheets today; more coming).",
+  "author": {
+    "name": "Shubham Damai"
+  },
+  "server": {
+    "type": "python",
+    "entry_point": "server/local_data_mcp/__main__.py",
+    "mcp_config": {
+      "command": "python",
+      "args": ["-m", "local_data_mcp"],
+      "env": {
+        "PYTHONPATH": "${__dirname}/server",
+        "LOCAL_DATA_MCP_GOOGLE_CREDENTIALS_FILE": "${__dirname}/credentials.json",
+        "LOCAL_DATA_MCP_GOOGLE_TOKEN_FILE": "${HOME}/.local-data-mcp/token.json",
+        "LOCAL_DATA_MCP_GOOGLE_SHEETS_ID": "${user_config.sheets_id}"
+      }
+    }
+  },
+  "user_config": {
+    "sheets_id": {
+      "type": "string",
+      "title": "Google Spreadsheet ID",
+      "description": "From your sheet's URL, the part between /d/ and /edit. Leave blank if you are not using Google Sheets.",
+      "required": false
+    }
+  }
+}
