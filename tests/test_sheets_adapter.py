@@ -1,8 +1,9 @@
 """Tests for the Google Sheets adapter.
 
-A fake Sheets service stands in for the real Google client, so these tests
-exercise our logic (tab listing, header normalization, row padding, missing
-tabs, error wrapping) with no network access.
+A fake Sheets service stands in for the real Google client, injected via a
+service *factory* (the adapter builds lazily). So these tests exercise our logic
+(tab listing, header normalization, row padding, missing tabs, error wrapping,
+lazy build) with no network access.
 """
 
 import pytest
@@ -92,7 +93,12 @@ DATA = {
 
 
 def _adapter(tabs=TABS, data=DATA) -> GoogleSheetsAdapter:
-    return GoogleSheetsAdapter("gsheets", "sheet-id", FakeSheetsService(tabs, data))
+    service = FakeSheetsService(tabs, data)
+    return GoogleSheetsAdapter("gsheets", "sheet-id", lambda: service)
+
+
+def _raising_adapter(status: int) -> GoogleSheetsAdapter:
+    return GoogleSheetsAdapter("g", "id", lambda: _RaisingService(status))
 
 
 # --- normalize_headers (pure logic) -----------------------------------------
@@ -108,6 +114,25 @@ def test_normalize_names_blank_headers_by_position() -> None:
 
 def test_normalize_dedupes_collisions() -> None:
     assert normalize_headers(["x", "x", "x"]) == ["x", "x_2", "x_3"]
+
+
+# --- lazy service build -----------------------------------------------------
+
+
+def test_service_is_built_lazily_and_cached() -> None:
+    calls = {"n": 0}
+    service = FakeSheetsService(TABS, DATA)
+
+    def factory():
+        calls["n"] += 1
+        return service
+
+    adapter = GoogleSheetsAdapter("g", "id", factory)
+    assert calls["n"] == 0  # not built at construction
+
+    adapter.list_resources()
+    adapter.list_resources()
+    assert calls["n"] == 1  # built once on first use, then cached
 
 
 # --- discovery / capability -------------------------------------------------
@@ -135,7 +160,7 @@ def test_get_schema_returns_table_schema() -> None:
 
 def test_get_schema_normalizes_messy_headers() -> None:
     data = {"t": [["Automation ", "", "Rules", "Rules"]]}
-    adapter = GoogleSheetsAdapter("g", "id", FakeSheetsService(["t"], data))
+    adapter = GoogleSheetsAdapter("g", "id", lambda: FakeSheetsService(["t"], data))
     assert adapter.get_schema("t").columns == [
         "Automation",
         "column_2",
@@ -156,7 +181,7 @@ def test_read_rows_returns_header_keyed_dicts() -> None:
 
 def test_read_rows_uses_normalized_headers() -> None:
     data = {"t": [["Name ", ""], ["Ann", "x"]]}
-    adapter = GoogleSheetsAdapter("g", "id", FakeSheetsService(["t"], data))
+    adapter = GoogleSheetsAdapter("g", "id", lambda: FakeSheetsService(["t"], data))
     assert adapter.read_rows("t", limit=10) == [{"Name": "Ann", "column_2": "x"}]
 
 
@@ -168,12 +193,14 @@ def test_read_rows_respects_limit() -> None:
 
 def test_read_rows_pads_ragged_rows() -> None:
     data = {"t": [["a", "b", "c"], ["1"]]}  # data row shorter than header
-    adapter = GoogleSheetsAdapter("g", "id", FakeSheetsService(["t"], data))
+    adapter = GoogleSheetsAdapter("g", "id", lambda: FakeSheetsService(["t"], data))
     assert adapter.read_rows("t", limit=10) == [{"a": "1", "b": "", "c": ""}]
 
 
 def test_read_rows_empty_tab_returns_empty_list() -> None:
-    adapter = GoogleSheetsAdapter("g", "id", FakeSheetsService(["empty"], {"empty": []}))
+    adapter = GoogleSheetsAdapter(
+        "g", "id", lambda: FakeSheetsService(["empty"], {"empty": []})
+    )
     assert adapter.read_rows("empty", limit=10) == []
 
 
@@ -186,12 +213,10 @@ def test_read_rows_unknown_resource_raises() -> None:
 
 
 def test_http_404_becomes_data_source_error() -> None:
-    adapter = GoogleSheetsAdapter("g", "id", _RaisingService(404))
     with pytest.raises(DataSourceError, match="not found"):
-        adapter.list_resources()
+        _raising_adapter(404).list_resources()
 
 
 def test_http_403_becomes_data_source_error() -> None:
-    adapter = GoogleSheetsAdapter("g", "id", _RaisingService(403))
     with pytest.raises(DataSourceError, match="denied"):
-        adapter.list_resources()
+        _raising_adapter(403).list_resources()

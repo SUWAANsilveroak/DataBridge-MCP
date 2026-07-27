@@ -83,22 +83,22 @@ server logs.
 
 ## Authorizing with Google (one-time)
 
-Google access is split into a one-time interactive step and silent runtime use,
-because the MCP server itself cannot open a browser.
+Google access is split into a one-time interactive sign-in and silent runtime
+use (the server refreshes the token automatically afterwards).
 
 1. In the Google Cloud Console, enable the **Google Sheets API** and **Google
    Docs API**, configure an **External** OAuth consent screen (add yourself as a
    test user), and create an **OAuth client ID → Desktop app**. Download its
    JSON and save it as `credentials.json` in the project root.
-2. Run the one-time authorization (opens a browser, asks you to consent):
+2. Sign in once, either way:
+   - **From your MCP client (recommended):** run the **`google_sign_in`** tool —
+     a browser opens for consent, and the Google sources become usable
+     immediately, no restart.
+   - **From a terminal:** `python -m local_data_mcp.google_workspace.auth`
 
-   ```powershell
-   python -m local_data_mcp.google_workspace.auth
-   ```
-
-   This writes `token.json`, which the server then uses automatically and
-   refreshes as needed. **Neither `credentials.json` nor `token.json` is
-   committed** — both are git-ignored.
+   Either writes `token.json`, which the server then uses and refreshes
+   automatically. **Neither `credentials.json` nor `token.json` is committed** —
+   both are git-ignored.
 
 The app requests only **read-only** scopes (`spreadsheets.readonly`,
 `documents.readonly`) and no Google Drive access.
@@ -124,6 +124,7 @@ pytest
 | `get_schema` | `source`, `resource` | Returns a tabular resource's column names (normalized) without reading rows. |
 | `find_resources` | `source`, `query` | Finds resource names matching a query (case-insensitive) — locate the right tab among many. |
 | `search_rows` | `source`, `resource`, `query`, `limit` | Returns rows whose any cell contains the query (scans up to 1000 rows). |
+| `google_sign_in` | none | Opens the Google consent browser (one-time) and saves your token; run once before reading Google data. |
 
 ## Project layout
 

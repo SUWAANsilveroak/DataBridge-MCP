@@ -51,7 +51,7 @@ def _write(path: str) -> None:
 
 def test_missing_token_raises_not_authorized(tmp_path):
     settings = _settings(tmp_path)  # no token file created
-    with pytest.raises(GoogleAuthError, match="Not authorized"):
+    with pytest.raises(GoogleAuthError, match="Not signed in"):
         auth_module.load_credentials(settings)
 
 
@@ -97,7 +97,7 @@ def test_refresh_failure_raises(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(auth_module, "Request", lambda: object())
 
-    with pytest.raises(GoogleAuthError, match="Re-authorize"):
+    with pytest.raises(GoogleAuthError, match="Could not refresh"):
         auth_module.load_credentials(settings)
 
 
