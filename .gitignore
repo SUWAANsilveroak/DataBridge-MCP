@@ -14,6 +14,9 @@ dist/
 .pytest_cache/
 .coverage
 
+# Built desktop-extension bundles (already covered by build/ and dist/, but be safe)
+*.mcpb
+
 # Editor / OS
 .vscode/
 .idea/

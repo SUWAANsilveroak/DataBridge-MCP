@@ -109,7 +109,12 @@ def authorize(settings: Settings | None = None) -> Credentials:
 
 
 def _save_token(credentials: Credentials, token_path: Path) -> None:
-    """Persist credentials (including the refresh token) to disk as JSON."""
+    """Persist credentials (including the refresh token) to disk as JSON.
+
+    Creates the parent directory first — when run from the packaged extension the
+    token lives in a per-user folder that may not exist yet.
+    """
+    token_path.parent.mkdir(parents=True, exist_ok=True)
     token_path.write_text(credentials.to_json(), encoding="utf-8")
 
 
