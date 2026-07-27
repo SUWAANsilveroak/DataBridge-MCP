@@ -5,9 +5,10 @@ lets LLM clients such as Claude Desktop interact with local data sources
 through **safe, validated tools** — instead of handing the model raw database
 or file access.
 
-> **Status:** early development. Current milestone is the *walking skeleton* —
-> a running server that exposes a single `server_info` health-check tool.
-> Data-source adapters (SQLite, CSV, JSON, Excel, Markdown, …) come next.
+> **Status:** early development. Google Sheets works end-to-end (discovery,
+> schema, read, and search tools) over an OAuth read-only connection, and the
+> server ships as a one-click **Desktop Extension** (`.mcpb`). More data-source
+> adapters (Google Docs, SQLite, CSV, JSON, Excel, Markdown, …) come next.
 
 ## Why this exists
 
@@ -42,10 +43,45 @@ python -m local_data_mcp
 
 (It will wait silently for a client to connect. Press `Ctrl+C` to stop.)
 
-## Using it from Claude Desktop
+## Install as a Desktop Extension (recommended for teammates)
 
-Add an entry to your `claude_desktop_config.json`, pointing at the Python
-interpreter inside your virtual environment:
+The easiest way to use this server in Claude Desktop is the packaged
+**Desktop Extension** (`.mcpb`) — no Python setup, no virtualenv, no editing
+JSON. The bundle vendors the package and all its dependencies, so a teammate
+only needs Claude Desktop.
+
+1. Get the bundle file `local-data-mcp.mcpb` (built by the maintainer — see
+   *Building the extension* below).
+2. In Claude Desktop: **Settings → Extensions**, then drag the `.mcpb` file
+   onto the window (or **Advanced settings → Install Extension** and pick it).
+3. In the extension's **Configure** screen, paste your **Google Spreadsheet
+   ID** — the string in the sheet's URL between `/d/` and `/edit` (just the ID,
+   not the whole URL). Click **Save**.
+4. Open a chat and ask for your sheet (e.g. *"list the tabs in my sheet"*).
+   The first time, Claude runs the `google_sign_in` tool: a browser opens for
+   consent, then the data tools work. Your personal token is saved under
+   `%USERPROFILE%\.local-data-mcp\token.json` — each teammate signs in as
+   themselves.
+
+To stop being prompted for approval on every call, open the extension's
+**Configure → Tool permissions** and set the tools to **Allow always** — safe
+here because every tool is **read-only**.
+
+> **Two caveats for a wider rollout:**
+> - The bundle includes a **compiled dependency** (`pydantic-core`), so it is
+>   **OS-specific** — a bundle built on Windows is for Windows teammates. Build
+>   once per OS.
+> - Sign-in uses the maintainer's Google **OAuth client**. While that client's
+>   consent screen is in *testing*, each teammate's Google account must be added
+>   as a **test user** in the Google Cloud Console (or the app must be published
+>   / made *Internal* to the organization). No code changes — just consent-screen
+>   configuration.
+
+## Using it from Claude Desktop (manual / development)
+
+For local development you can skip the extension and point Claude Desktop
+directly at your virtualenv. Add an entry to your `claude_desktop_config.json`,
+pointing at the Python interpreter inside your virtual environment:
 
 ```json
 {
@@ -113,6 +149,32 @@ replace `credentials.json`) and re-run the authorize command.
 pytest
 ```
 
+## Building the extension (maintainer)
+
+The `.mcpb` bundle is produced by a build script that vendors the package and
+every dependency, then packs the result with the `mcpb` CLI (fetched via `npx`,
+so Node must be on `PATH`):
+
+```powershell
+python scripts/build_extension.py
+```
+
+This writes `dist/local-data-mcp.mcpb`. The script assembles a staging
+directory (`build/extension/`) containing:
+
+- `manifest.json` — copied from `extension/manifest.json`; declares the run
+  command, environment wiring, and the single `sheets_id` user-config field
+  Claude renders as a form.
+- `credentials.json` — the OAuth client, bundled so teammates don't each need
+  their own (git-ignored in the repo; must be present at the project root when
+  you build).
+- `server/` — the package **plus all dependencies**, installed via
+  `pip install --target` so the end user needs no `pip install`.
+
+The manifest wires paths with extension variables: `${__dirname}` (the
+installed bundle dir) for the code and credentials, and `${HOME}` for the
+per-user token, so each teammate's sign-in is isolated.
+
 ## Available tools
 
 | Tool | Input | Description |
@@ -146,6 +208,10 @@ src/local_data_mcp/
     auth.py           #   OAuth: authorize (interactive) + load (silent)
     sheets.py         #   GoogleSheetsAdapter — reads one spreadsheet
 tests/                # one test module per source module
+extension/
+  manifest.json       # Desktop Extension manifest (run command + config UI)
+scripts/
+  build_extension.py  # vendors deps + packs the .mcpb bundle
 ```
 
 ## Architecture: the adapter pattern
