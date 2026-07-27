@@ -1,24 +1,28 @@
 """Google Workspace OAuth: obtain and refresh user credentials.
 
-Auth is split into two phases because an MCP server cannot run an interactive
-browser login at request time (it is a stdio subprocess and its stdout is
-reserved for the protocol):
+Auth has two phases:
 
-1. ``authorize()`` — INTERACTIVE, run once by the user in a terminal. Opens a
-   browser, the user consents, and a long-lived token (with a refresh token) is
-   written to disk.
+1. ``authorize()`` — INTERACTIVE. Opens a browser, the user consents, and a
+   long-lived token (with a refresh token) is written to disk. It is exposed to
+   users both as the ``google_sign_in`` MCP tool and as a terminal command.
 2. ``load_credentials()`` — SILENT, used at runtime by adapters. Reads the saved
    token and refreshes it automatically. Never opens a browser.
+
+Because this process's stdout is the MCP protocol channel, ``authorize`` runs the
+browser flow with its console output redirected to stderr, so a sign-in
+triggered from inside the server can never corrupt the protocol.
 
 Nothing here is tied to a specific Google account: the credentials file and the
 token file are configurable paths, and the scopes are the same for a personal or
 an organization account. Switching from personal to org later is just "swap
-credentials.json and re-run authorize" — no code changes.
+credentials.json and sign in again" — no code changes.
 """
 
 from __future__ import annotations
 
+import contextlib
 import logging
+import sys
 from pathlib import Path
 
 from google.auth.exceptions import RefreshError
@@ -39,20 +43,22 @@ SCOPES = [
     "https://www.googleapis.com/auth/documents.readonly",
 ]
 
-_AUTHORIZE_HINT = "python -m local_data_mcp.google_workspace.auth"
+_SIGN_IN_HINT = (
+    "Sign in to Google first: use the `google_sign_in` tool, or run "
+    "`python -m local_data_mcp.google_workspace.auth`."
+)
 
 
 def load_credentials(settings: Settings) -> Credentials:
     """Return valid Google credentials for runtime use, refreshing if needed.
 
-    Raises ``GoogleAuthError`` if the app has not been authorized yet, or if the
-    saved token is invalid and cannot be refreshed (e.g. it was revoked).
+    Raises ``GoogleAuthError`` if the user has not signed in yet, or if the saved
+    token is invalid and cannot be refreshed (e.g. it was revoked).
     """
     token_path = Path(settings.google_token_file)
     if not token_path.exists():
         raise GoogleAuthError(
-            f"Not authorized yet: no token file at '{token_path}'. "
-            f"Run `{_AUTHORIZE_HINT}` once to sign in."
+            f"Not signed in to Google (no token at '{token_path}'). {_SIGN_IN_HINT}"
         )
 
     credentials = Credentials.from_authorized_user_file(str(token_path), SCOPES)
@@ -66,22 +72,21 @@ def load_credentials(settings: Settings) -> Credentials:
             credentials.refresh(Request())
         except RefreshError as error:
             raise GoogleAuthError(
-                f"Could not refresh Google credentials. Re-authorize with "
-                f"`{_AUTHORIZE_HINT}`."
+                f"Could not refresh Google credentials. {_SIGN_IN_HINT}"
             ) from error
         _save_token(credentials, token_path)
         return credentials
 
     raise GoogleAuthError(
-        f"Google credentials are invalid and cannot be refreshed. Re-authorize "
-        f"with `{_AUTHORIZE_HINT}`."
+        f"Google credentials are invalid and cannot be refreshed. {_SIGN_IN_HINT}"
     )
 
 
 def authorize(settings: Settings | None = None) -> Credentials:
-    """Run the one-time interactive browser consent flow and save the token.
+    """Run the interactive browser consent flow and save the token.
 
-    Intended to be run by hand from a terminal, not by the MCP server.
+    Safe to call from inside the MCP server: the flow's console output is
+    redirected to stderr so it cannot corrupt the stdout protocol channel.
     """
     settings = settings or Settings.from_env()
 
@@ -94,7 +99,10 @@ def authorize(settings: Settings | None = None) -> Credentials:
         )
 
     flow = InstalledAppFlow.from_client_secrets_file(str(credentials_path), SCOPES)
-    credentials = flow.run_local_server(port=0)
+    # This process's stdout carries the MCP protocol; keep the flow's prints off
+    # it by redirecting them to stderr for the duration of the browser flow.
+    with contextlib.redirect_stdout(sys.stderr):
+        credentials = flow.run_local_server(port=0)
 
     _save_token(credentials, Path(settings.google_token_file))
     return credentials

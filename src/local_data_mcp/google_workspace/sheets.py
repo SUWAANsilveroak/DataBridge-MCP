@@ -2,15 +2,18 @@
 
 Exposes ONE spreadsheet: each tab is a resource, each tab's rows are data.
 
-Testability: the adapter does NOT build its own Google connection. It receives
-an already-built Sheets ``service`` object, so tests can inject a fake and
-exercise the logic (header parsing, normalization, error wrapping) without any
-network access. ``build_sheets_service`` builds the real one in production.
+Testability & laziness: the adapter does NOT build its own Google connection at
+construction time. It receives a ``service_factory`` — a zero-arg callable that
+returns a built Sheets service — and calls it *lazily* on first use, caching the
+result. This means the source can be registered before the user has signed in
+(the factory only runs, and only then triggers auth, when a tool is first used),
+and tests can inject a factory returning a fake service with no network access.
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from googleapiclient.discovery import build
@@ -54,19 +57,30 @@ def build_sheets_service(credentials: Any) -> Any:
 class GoogleSheetsAdapter(DataSourceAdapter, SupportsTabularRead):
     """Reads the tabs and rows of a single Google Spreadsheet."""
 
-    def __init__(self, name: str, spreadsheet_id: str, service: Any) -> None:
+    def __init__(
+        self, name: str, spreadsheet_id: str, service_factory: Callable[[], Any]
+    ) -> None:
         self._name = name
         self._spreadsheet_id = spreadsheet_id
-        self._service = service
+        self._service_factory = service_factory
+        self._service: Any | None = None
 
     @property
     def name(self) -> str:
         return self._name
 
+    def _service_client(self) -> Any:
+        """Build the Google service on first use, then reuse it."""
+        if self._service is None:
+            self._service = self._service_factory()
+        return self._service
+
     def list_resources(self) -> list[str]:
         """Return the spreadsheet's tab titles."""
         metadata = self._execute(
-            self._service.spreadsheets().get(spreadsheetId=self._spreadsheet_id)
+            self._service_client().spreadsheets().get(
+                spreadsheetId=self._spreadsheet_id
+            )
         )
         return [sheet["properties"]["title"] for sheet in metadata.get("sheets", [])]
 
@@ -90,7 +104,8 @@ class GoogleSheetsAdapter(DataSourceAdapter, SupportsTabularRead):
         self._require_resource(resource)
         # Single-quote the tab name so titles with spaces are valid A1 notation.
         response = self._execute(
-            self._service.spreadsheets()
+            self._service_client()
+            .spreadsheets()
             .values()
             .get(spreadsheetId=self._spreadsheet_id, range=f"'{resource}'")
         )

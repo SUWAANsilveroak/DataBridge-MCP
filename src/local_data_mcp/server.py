@@ -20,10 +20,9 @@ from local_data_mcp.adapters.capabilities import SupportsTabularRead, TableSchem
 from local_data_mcp.config import Settings
 from local_data_mcp.errors import (
     AdapterNotFoundError,
-    GoogleAuthError,
     UnsupportedCapabilityError,
 )
-from local_data_mcp.google_workspace.auth import load_credentials
+from local_data_mcp.google_workspace.auth import authorize, load_credentials
 from local_data_mcp.google_workspace.sheets import (
     GoogleSheetsAdapter,
     build_sheets_service,
@@ -203,28 +202,42 @@ def search_rows(
     return filter_rows(rows, query)[:limit]
 
 
+@mcp.tool()
+def google_sign_in() -> str:
+    """Sign in to Google in your browser (one-time).
+
+    Opens the Google consent screen; after you approve, a token is saved and the
+    Google data sources become usable. Run this once before reading Google data;
+    the server refreshes the token automatically afterwards.
+    """
+    logger.info("tool=google_sign_in")
+    authorize(Settings.from_env())
+    return "Signed in to Google. You can now use the Google data sources."
+
+
 def _register_configured_sources(
     registry: AdapterRegistry, settings: Settings
 ) -> None:
     """Register optional, externally-configured data sources at runtime.
 
-    Currently just Google Sheets, and only when a spreadsheet ID is configured
-    *and* the user has authorized. Any failure is logged and skipped so the
-    server still starts with the always-available sources — Google not being set
-    up must not take the whole server down.
+    The Google Sheets source is registered whenever a spreadsheet ID is
+    configured — it does NOT require a token at startup. Authentication happens
+    lazily on first use (via the service factory), so the server always starts
+    and a user can sign in with the ``google_sign_in`` tool without a restart.
     """
     if not settings.google_sheets_id:
         logger.info("no google_sheets_id configured; skipping Google Sheets source")
         return
-    try:
-        credentials = load_credentials(settings)
-        service = build_sheets_service(credentials)
-        registry.register(
-            GoogleSheetsAdapter("gsheets", settings.google_sheets_id, service)
-        )
-        logger.info("registered Google Sheets source 'gsheets'")
-    except GoogleAuthError as error:
-        logger.warning("Google Sheets source not registered: %s", error)
+
+    def _service_factory() -> object:
+        # Runs on first Google tool use, not at startup — so sign-in can happen
+        # after the server is already running.
+        return build_sheets_service(load_credentials(settings))
+
+    registry.register(
+        GoogleSheetsAdapter("gsheets", settings.google_sheets_id, _service_factory)
+    )
+    logger.info("registered Google Sheets source 'gsheets' (auth is lazy)")
 
 
 def main() -> None:
