@@ -46,36 +46,37 @@ python -m local_data_mcp
 ## Install as a Desktop Extension (recommended for teammates)
 
 The easiest way to use this server in Claude Desktop is the packaged
-**Desktop Extension** (`.mcpb`) — no Python setup, no virtualenv, no editing
-JSON. The bundle vendors the package and all its dependencies, so a teammate
-only needs Claude Desktop.
+**Desktop Extension** (`.mcpb`). Each bundle is fully self-contained — it
+carries its own Python **and** every dependency — so a teammate needs **nothing
+installed**: no Python, no version to match, no virtualenv, no editing JSON.
 
-1. Get the bundle file `local-data-mcp.mcpb` (built by the maintainer — see
-   *Building the extension* below).
-2. In Claude Desktop: **Settings → Extensions**, then drag the `.mcpb` file
-   onto the window (or **Advanced settings → Install Extension** and pick it).
-3. In the extension's **Configure** screen, paste your **Google Spreadsheet
-   ID** — the string in the sheet's URL between `/d/` and `/edit` (just the ID,
-   not the whole URL). Click **Save**.
-4. Open a chat and ask for your sheet (e.g. *"list the tabs in my sheet"*).
-   The first time, Claude runs the `google_sign_in` tool: a browser opens for
-   consent, then the data tools work. Your personal token is saved under
-   `%USERPROFILE%\.local-data-mcp\token.json` — each teammate signs in as
+See **[INSTALL.md](INSTALL.md)** for a screenshot-free, step-by-step teammate
+guide. In short:
+
+1. Download the bundle **for your OS**:
+   - Windows → `local-data-mcp-windows.mcpb`
+   - Mac (Apple Silicon) → `local-data-mcp-macos-arm64.mcpb`
+   - Linux → `local-data-mcp-linux.mcpb`
+2. In Claude Desktop: **Settings → Extensions**, then drag the `.mcpb` onto the
+   window (or **Advanced settings → Install Extension** and pick it).
+3. In **Configure**, paste your **Google Spreadsheet ID** — the part of the
+   sheet URL between `/d/` and `/edit` (just the ID). Click **Save**.
+4. Open a chat and ask for your sheet (e.g. *"list the tabs in my sheet"*). The
+   first time, Claude runs the `google_sign_in` tool: a browser opens for
+   consent, then the data tools work. Your personal token is saved in your home
+   folder (`~/.local-data-mcp/token.json`) — each teammate signs in as
    themselves.
 
-To stop being prompted for approval on every call, open the extension's
-**Configure → Tool permissions** and set the tools to **Allow always** — safe
-here because every tool is **read-only**.
+To stop per-call approval prompts, open **Configure → Tool permissions** and set
+the tools to **Allow always** — safe here because every tool is **read-only**.
 
-> **Two caveats for a wider rollout:**
-> - The bundle includes a **compiled dependency** (`pydantic-core`), so it is
->   **OS-specific** — a bundle built on Windows is for Windows teammates. Build
->   once per OS.
-> - Sign-in uses the maintainer's Google **OAuth client**. While that client's
->   consent screen is in *testing*, each teammate's Google account must be added
->   as a **test user** in the Google Cloud Console (or the app must be published
->   / made *Internal* to the organization). No code changes — just consent-screen
->   configuration.
+> **Two things to know for a wider rollout:**
+> - Bundles are **per-OS** (each ships a native Python + compiled
+>   `pydantic-core`). Pick the file matching the teammate's OS.
+> - Sign-in uses the maintainer's Google **OAuth client**. While its consent
+>   screen is in *testing*, each teammate's Google account must be added as a
+>   **test user** in the Google Cloud Console (or the app published / made
+>   *Internal* to the org). No code changes — just consent-screen config.
 
 ## Using it from Claude Desktop (manual / development)
 
@@ -149,30 +150,49 @@ replace `credentials.json`) and re-run the authorize command.
 pytest
 ```
 
-## Building the extension (maintainer)
+## Building the extensions (maintainer)
 
-The `.mcpb` bundle is produced by a build script that vendors the package and
-every dependency, then packs the result with the `mcpb` CLI (fetched via `npx`,
-so Node must be on `PATH`):
+Each `.mcpb` is a **self-contained, per-OS bundle** carrying its own Python plus
+every dependency, so the end user installs nothing. Build all three (or one):
 
 ```powershell
-python scripts/build_extension.py
+python scripts/build_extension.py                 # windows, macos-arm64, linux
+python scripts/build_extension.py windows          # a single target
 ```
 
-This writes `dist/local-data-mcp.mcpb`. The script assembles a staging
-directory (`build/extension/`) containing:
+**Requirements:** `uv` (`pip install uv`) and Node's `npx` on `PATH`.
 
-- `manifest.json` — copied from `extension/manifest.json`; declares the run
-  command, environment wiring, and the single `sheets_id` user-config field
-  Claude renders as a form.
-- `credentials.json` — the OAuth client, bundled so teammates don't each need
-  their own (git-ignored in the repo; must be present at the project root when
-  you build).
-- `server/` — the package **plus all dependencies**, installed via
-  `pip install --target` so the end user needs no `pip install`.
+For each target the script assembles `build/<target>/` and packs it into
+`dist/local-data-mcp-<target>.mcpb`:
 
-The manifest wires paths with extension variables: `${__dirname}` (the
-installed bundle dir) for the code and credentials, and `${HOME}` for the
+- `runtime/python/` — a relocatable standalone CPython 3.12 downloaded from
+  [python-build-standalone](https://github.com/astral-sh/python-build-standalone).
+  Bundling the interpreter fixes its minor version, keeping the compiled
+  `pydantic-core` wheel in lock-step (a cp312 wheel always runs on a cp312
+  interpreter).
+- `server/` — our package **plus all deps**, vendored with **`uv`**. uv's
+  `--python-platform` evaluates dependency markers for the *target* OS, so
+  Windows-only deps (`pywin32`, `colorama`) are correctly excluded from the
+  Mac/Linux bundles — something plain `pip` cross-installs get wrong.
+- `manifest.json` — generated from `extension/manifest.json` with the run
+  command pointed at the bundled interpreter (`${__dirname}/runtime/...`), so no
+  system Python is ever used.
+- `credentials.json` — the OAuth client (git-ignored; must be at the project
+  root when you build).
+
+The build **prunes** aggressively with zero functional impact: unused Google API
+discovery docs (~100 MB), the interpreter's test suite / Tcl-Tk / IDLE, and
+`__pycache__`. Bundles end up ~28–40 MB.
+
+> **Cross-build caveat.** Building all three OSes from one machine works, but
+> Windows can't recreate the Unix symlinks in the standalone Python (the build
+> de-duplicates the resulting copies). More importantly, a bundle can only be
+> *runtime-tested* on its own OS. For a production rollout, build the Mac/Linux
+> bundles natively — e.g. via GitHub Actions runners — and smoke-test each on
+> its target OS before distributing.
+
+The manifest wires paths with extension variables: `${__dirname}` (the installed
+bundle dir) for the interpreter, code, and credentials, and `${HOME}` for the
 per-user token, so each teammate's sign-in is isolated.
 
 ## Available tools

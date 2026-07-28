@@ -28,6 +28,11 @@ dependencies = [
 dev = [
     "pytest>=8",
 ]
+# Tools for building the per-OS Desktop Extensions (scripts/build_extension.py).
+# uv does the cross-platform dependency vendoring; see the build docs in README.
+build = [
+    "uv>=0.4",
+]
 
 # `python -m local_data_mcp` is the command Claude Desktop will launch.
 # We also expose a console script for convenience during local development.
