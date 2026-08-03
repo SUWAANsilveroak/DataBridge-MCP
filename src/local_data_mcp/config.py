@@ -50,6 +50,13 @@ class Settings(BaseModel):
             "registered."
         ),
     )
+    sqlite_path: str | None = Field(
+        default=None,
+        description=(
+            "Path to a local SQLite database file to expose (read-only). If "
+            "unset, no SQLite source is registered."
+        ),
+    )
 
     @field_validator("log_level", mode="before")
     @classmethod
@@ -86,5 +93,9 @@ class Settings(BaseModel):
         sheets_id = env.get(f"{ENV_PREFIX}GOOGLE_SHEETS_ID")
         if sheets_id is not None:
             values["google_sheets_id"] = sheets_id
+
+        sqlite_path = env.get(f"{ENV_PREFIX}SQLITE_PATH")
+        if sqlite_path is not None:
+            values["sqlite_path"] = sqlite_path
 
         return cls(**values)

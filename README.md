@@ -5,10 +5,11 @@ lets LLM clients such as Claude Desktop interact with local data sources
 through **safe, validated tools** — instead of handing the model raw database
 or file access.
 
-> **Status:** early development. Google Sheets works end-to-end (discovery,
-> schema, read, and search tools) over an OAuth read-only connection, and the
-> server ships as a one-click **Desktop Extension** (`.mcpb`). More data-source
-> adapters (Google Docs, SQLite, CSV, JSON, Excel, Markdown, …) come next.
+> **Status:** early development. Two data sources work end-to-end — **Google
+> Sheets** (OAuth, read-only) and a **local SQLite** database (read-only) — both
+> through the same discovery/schema/read/search tools. The server also ships as
+> a one-click **Desktop Extension** (`.mcpb`). More adapters (Google Docs, CSV,
+> JSON, Excel, Markdown, …) come next.
 
 ## Why this exists
 
@@ -113,6 +114,7 @@ The server is configured through environment variables (namespaced with the
 | `LOCAL_DATA_MCP_GOOGLE_CREDENTIALS_FILE` | `credentials.json` | Path to the OAuth client secrets file from Google Cloud Console. |
 | `LOCAL_DATA_MCP_GOOGLE_TOKEN_FILE` | `token.json` | Path where the user's OAuth token is saved after authorizing. |
 | `LOCAL_DATA_MCP_GOOGLE_SHEETS_ID` | *(unset)* | ID of a Google Spreadsheet to expose (the string in its URL between `/d/` and `/edit`). If unset, no Sheets source is registered. |
+| `LOCAL_DATA_MCP_SQLITE_PATH` | *(unset)* | Path to a local SQLite database file to expose **read-only** (each table and view becomes a resource named `sqlite`). If unset, no SQLite source is registered. |
 
 Logs are written to **stderr**, never stdout — stdout is reserved for the MCP
 protocol. When run from Claude Desktop, log output appears in the client's MCP
@@ -224,6 +226,7 @@ src/local_data_mcp/
     capabilities.py   #   SupportsTabularRead — opt-in read capability
     registry.py       #   AdapterRegistry — holds & looks up adapters
     memory.py         #   InMemoryAdapter — reference implementation
+    sqlite.py         #   SQLiteAdapter — read-only local database source
   google_workspace/   # Google integration
     auth.py           #   OAuth: authorize (interactive) + load (silent)
     sheets.py         #   GoogleSheetsAdapter — reads one spreadsheet

@@ -17,6 +17,7 @@ from mcp.server.fastmcp import FastMCP
 from local_data_mcp import __version__
 from local_data_mcp.adapters import AdapterRegistry, InMemoryAdapter
 from local_data_mcp.adapters.capabilities import SupportsTabularRead, TableSchema
+from local_data_mcp.adapters.sqlite import SQLiteAdapter
 from local_data_mcp.config import Settings
 from local_data_mcp.errors import (
     AdapterNotFoundError,
@@ -220,10 +221,20 @@ def _register_configured_sources(
 ) -> None:
     """Register optional, externally-configured data sources at runtime.
 
-    The Google Sheets source is registered whenever a spreadsheet ID is
-    configured — it does NOT require a token at startup. Authentication happens
-    lazily on first use (via the service factory), so the server always starts
-    and a user can sign in with the ``google_sign_in`` tool without a restart.
+    Each source is independent: a missing config for one never prevents another
+    from registering. All registration is conditional, so the server always
+    starts even with nothing configured.
+    """
+    _register_google_sheets(registry, settings)
+    _register_sqlite(registry, settings)
+
+
+def _register_google_sheets(registry: AdapterRegistry, settings: Settings) -> None:
+    """Register the Google Sheets source whenever a spreadsheet ID is configured.
+
+    It does NOT require a token at startup — authentication happens lazily on
+    first use (via the service factory), so the server always starts and a user
+    can sign in with the ``google_sign_in`` tool without a restart.
     """
     if not settings.google_sheets_id:
         logger.info("no google_sheets_id configured; skipping Google Sheets source")
@@ -238,6 +249,16 @@ def _register_configured_sources(
         GoogleSheetsAdapter("gsheets", settings.google_sheets_id, _service_factory)
     )
     logger.info("registered Google Sheets source 'gsheets' (auth is lazy)")
+
+
+def _register_sqlite(registry: AdapterRegistry, settings: Settings) -> None:
+    """Register the local SQLite source whenever a database path is configured."""
+    if not settings.sqlite_path:
+        logger.info("no sqlite_path configured; skipping SQLite source")
+        return
+
+    registry.register(SQLiteAdapter("sqlite", settings.sqlite_path))
+    logger.info("registered SQLite source 'sqlite' (path=%s)", settings.sqlite_path)
 
 
 def main() -> None:
