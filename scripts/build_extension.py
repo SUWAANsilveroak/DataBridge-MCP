@@ -34,6 +34,7 @@ import subprocess
 import sys
 import tarfile
 import urllib.request
+import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -336,6 +337,31 @@ def copy_credentials(target_dir: Path) -> None:
         )
 
 
+def set_executable_in_mcpb(mcpb_path: Path, exec_arcname: str) -> None:
+    """Set the Unix executable bit on one entry inside a packed ``.mcpb`` zip.
+
+    Needed only for the Unix (macOS/Linux) bundles when building on Windows: a
+    Windows filesystem has no executable bit, so the bundled ``python3.12`` gets
+    zipped without it and macOS/Linux refuse to spawn it ("Permission denied").
+    We rewrite the archive, forcing mode 0o755 on the interpreter. (Native Unix
+    builds preserve the bit and this is a harmless no-op there.)
+    """
+    exec_arcname = exec_arcname.replace("\\", "/")
+    temp = mcpb_path.with_name(mcpb_path.name + ".tmp")
+    with zipfile.ZipFile(mcpb_path) as zin, zipfile.ZipFile(temp, "w", zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.infolist():
+            data = zin.read(item.filename)
+            info = zipfile.ZipInfo(item.filename, date_time=item.date_time)
+            info.compress_type = item.compress_type
+            info.external_attr = item.external_attr
+            if item.filename.replace("\\", "/") == exec_arcname:
+                # High 16 bits of external_attr hold the Unix st_mode. Set a
+                # regular file (S_IFREG) with rwxr-xr-x so it extracts executable.
+                info.external_attr = (0o100755 << 16) | (info.external_attr & 0xFFFF)
+            zout.writestr(info, data)
+    temp.replace(mcpb_path)
+
+
 def build_target(name: str, spec: dict, our_wheel: Path) -> Path:
     """Assemble and pack the bundle for one OS; return the output path."""
     print(f"\n=== {name} ===")
@@ -355,6 +381,11 @@ def build_target(name: str, spec: dict, our_wheel: Path) -> Path:
 
     output = DIST_DIR / spec["output"]
     run([NPX, "--yes", "@anthropic-ai/mcpb@latest", "pack", str(target_dir), str(output)])
+    # Unix bundles need the interpreter's executable bit restored (Windows zips
+    # drop it). ``.exe`` targets (Windows) don't need it.
+    if not spec["python_exe"].endswith(".exe"):
+        set_executable_in_mcpb(output, "runtime/" + spec["python_exe"])
+        print("  set +x on bundled python3.12")
     size_mb = output.stat().st_size / 1_000_000
     print(f"  built {output.name} ({size_mb:.1f} MB)")
     return output
